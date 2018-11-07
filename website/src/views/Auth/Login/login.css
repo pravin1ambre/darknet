@@ -1,0 +1,22 @@
+header.navbar {
+    background-color: #003746	!important;
+}
+
+.img-size{
+    height: 68px;
+}
+
+.card {
+    margin-bottom: 7.5rem;
+}
+
+
+
+.btn-color{
+	background-color:#00B4AF;
+	color:black;font-weight: bold;
+}
+
+.onerror{
+	color: red;
+}

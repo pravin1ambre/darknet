@@ -1,0 +1,10 @@
+.table-bordered thead th, .table-bordered thead td {
+    background-color: #f15642;
+    color: white;
+    border-bottom-width: 2px;
+}
+
+.mt-2, .my-2 {
+    margin-top: 0.5rem !important;
+    margin-left: 10%;
+}

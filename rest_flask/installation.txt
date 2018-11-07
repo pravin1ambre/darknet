@@ -1,0 +1,12 @@
+steps
+1) create virtualenv using below command
+	virtualenv env --python=/usr/bin/python3.6
+2) activate that 
+	source env/bin/activate
+	sudo ufw allow 5000
+
+3) install requirement.txt
+        pip install -r requiremnet.txt
+
+4) run application
+	gunicorn --bind 0.0.0.0:5000 wsgi:app

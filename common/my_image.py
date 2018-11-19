@@ -9,40 +9,48 @@ import uuid
 import socket
 import shutil
 from datetime import datetime
+from PIL import ImageFile
+from logger import exception
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
 publisher = DataPublisher()
 from detectobject import detect_object
 
+MONGO_HOST = 'localhost'
+MONGO_PORT = '27017'
+MONGO_DB = 'kkesani_3'
+IMAGE_PATH = '/home/pravin/project/darknet/darknet/images/'
+DATASCIENCE_IMAGE_PATH = '/home/pravin/data_science_images/'
+IMG_SLEEP_TIME = 1
+PROCESS_SLEEP_TIME = 2
+MAX_IMG_SIZE = 50017
+RECORDS_EXPIRY_SECONDS = 60
+db = MongoClient('mongodb://{}:{}'.format(MONGO_HOST, MONGO_PORT))[MONGO_DB]
+db.timeseries_data.ensure_index("creationTime",
+                       expireAfterSeconds=RECORDS_EXPIRY_SECONDS)
+db.config.ensure_index("creationTime",
+                       expireAfterSeconds=RECORDS_EXPIRY_SECONDS)
+
+
+@exception
 def reduce_image_size(image_path,how_much):
     print("Got an image more than 400 kb")
     im = Image.open(image_path)
-    width, height = im.size
-    size = width / how_much, height / how_much
-    im.thumbnail(size, Image.ANTIALIAS)
-    im.save(image_path)
+    dim =(500,500)
+    newimg = im.resize(dim)
+    newimg.save(image_path)
 
-def mongo_connection_with_collection():
-    client = MongoClient('mongodb://localhost:27017')
-    db = client['kkesani_3']
-    col = db.timeseries_data
-    col1 = db.config
-    return col, col1
-
-
-def fetch_image(image_str, count):
-    fh = open("/home/EOG/kkesani/fetched_images/{}.jpg".format(count), "wb")
-    fh.write(base64.b64decode(image_str))
-    fh.close()
-	
+@exception	
 def resizeImage(img):    
-    if os.path.getsize(img) > 50017:
+    if os.path.getsize(img) > MAX_IMG_SIZE:
         reduce_image_size(img, how_much=2)
     print("Now image Size: {}".format(os.path.getsize(img)))
     with open(img, "rb") as imageFile:
         img_str = base64.b64encode(imageFile.read())
     return img_str
 
+@exception
 def image_to_str(img, typ = None):
     with open(img, "rb") as imageFile:
         img_str = base64.b64encode(imageFile.read())
@@ -50,15 +58,14 @@ def image_to_str(img, typ = None):
 
 while True:
     #data_path = "C:\\Users\\kkesani\\Desktop\\images"
-    data_path = "/home/images"
+    data_path = "{}/images/".format(os.getcwd())
     files_with_path = glob.glob(data_path + "/*")
     print("Got {} files on  {}".format(len(files_with_path),data_path))
-    col, col1 = mongo_connection_with_collection()
     prediction_image="{}/predictions.jpg".format(os.getcwd())
     for img in files_with_path:
         utc = int(time.time())
         #'/home/copy_images/'
-        copy_path = "{}/{}".format('/home/copy_images/', str("".join(os.path.basename(img).split("_",2)[:2])))
+        copy_path = "{}/{}".format('/home/pravin/', str("".join(os.path.basename(img).split("_",2)[:2])))
         if not os.path.exists(copy_path):
             os.mkdir(copy_path)
         shutil.copy(img, copy_path)
@@ -67,7 +74,7 @@ while True:
 
         data_dict = {}
         mac_address = "_".join(os.path.basename(img).split("_",3)[:3])
-        mac_address_exists = col1.find_one({"mac_address": mac_address})
+        mac_address_exists = db.config.find_one({"mac_address": mac_address})
         print("Executing for {}".format(img))
         img_str = image_to_str(img)
         objects = ''
@@ -80,7 +87,7 @@ while True:
         if mac_address_exists == None:
             data = { 'mac_address': mac_address, 'object_sync': False,'tag'   : 'tag', 
                      'source_sync':True,  'thumbnail_sync': True , 'prediction_sync': False             }
-            col1.insert_one(data)
+            db.config.insert_one(data)
 
         thumbnail_image = resizeImage(img)        
         data_dict['uuid']=  str(uuid.uuid1())
@@ -88,14 +95,15 @@ while True:
         data_dict['mac_address']= mac_address
         data_dict['source']= img_str
         data_dict['thumbnail'] = thumbnail_image 
-        col.insert_one(data_dict)       
+        data_dict["creationTime"] = datetime.now(),
+        db.timeseries_data.insert_one(data_dict)       
 
         hostname = socket.gethostname()        
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         publisher.send(json.dumps({
             'thumbnail' : thumbnail_image.decode(), 'uuid':data_dict['uuid'],'timestamp':data_dict['timestamp'],
-            'mac_address': data_dict['mac_address'],'ip': s.getsockname()[0] , 'objects':json.dumps(objects) 
+            'mac_address': data_dict['mac_address'],'ip': s.getsockname()[0] , 'objects': json.dumps(objects)
         }))
         s.close()
         time.sleep(1)

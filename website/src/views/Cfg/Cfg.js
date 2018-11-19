@@ -1,7 +1,7 @@
 import React, { Component } from 'react';
-import { Card, CardBody,CardHeader,  FormGroup, Button,
-  Col, Input, Table,
-  InputGroup,  Row } from 'reactstrap';
+import { Button,Badge, Card, CardBody, CardFooter,CardHeader,Pagination, 
+  Col, Container, Input, PaginationItem,PaginationLink, Table,FormGroup,Label,
+  InputGroup, InputGroupAddon, InputGroupText, Row, Progress } from 'reactstrap';
 import axios from 'axios';
 import Env from '../../enviorment';
 import 'moment-timezone';
@@ -12,17 +12,31 @@ class Cfg extends Component {
   constructor(props) {
     super();
     this.state = {
-      records:[],
+      records:'',skip:0,next:false,prev:false
     }
     this.getRecords = this.getRecords.bind(this)
     this.getRecords()
   }
   
-  getRecords(){
-    axios.get(Env.Url+'configuration').then(res =>{
-      console.log(res.data)
-      this.setState({records : res.data})
-    })
+  getRecords(evt=null){
+    if(evt === 'prev'){
+      this.state.skip = this.state.skip -10
+    }
+    if(evt === 'next'){
+      this.state.skip = this.state.skip + 10
+    }    
+    axios.get(Env.Url+'configuration/'+this.state.skip).then(res =>{
+      if(res.data.data.length>0){
+        this.setState({records : res.data.data})
+        this.setState({count : res.data.count})
+        this.setState({pages : res.data.pages})
+        this.setState({current_page : res.data.current_page})
+      }
+      
+    }).catch(error => {
+      this.state.skip =10
+  });
+
   }
 
   searchElement(evt) {
@@ -77,7 +91,28 @@ class Cfg extends Component {
                               </tr>
                             )): 'No records Found'}
                         </tbody>
-                      </Table>                      
+                      </Table>
+                      <nav>
+                        <Row>
+
+                          <Col xs='12'  sm='2'>
+                            <Pagination>
+                              <PaginationItem onClick={ ((e) => this.getRecords('prev'))} disabled={this.state.prev}><PaginationLink previous tag="button">Prev</PaginationLink></PaginationItem>
+                              <PaginationItem  onClick={ ((e) => this.getRecords('next'))}  disabled={this.state.next}><PaginationLink next tag="button">Next</PaginationLink></PaginationItem>                              
+                            </Pagination>
+                          </Col>
+                          <Col xs="12" sm="2">
+                                    count : {this.state.count}
+                          </Col>
+                          <Col xs="12" sm="2">
+                                    pages : {this.state.pages}
+                          </Col>
+                          <Col xs="12" sm="2">
+                                    current_page : {this.state.current_page}
+                          </Col>
+                        </Row>
+                      </nav>
+
                     </CardBody>
                 </Card>
               </Col>

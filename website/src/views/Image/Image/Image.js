@@ -22,7 +22,7 @@ class Image extends Component {
   constructor(props) {
     super();
     this.state = {
-      records:'',skip:10,next:false,prev:false
+      records:'',skip:0,next:false,prev:false
     }
     this.getRecords = this.getRecords.bind(this)
     this.getRecords()
@@ -40,16 +40,16 @@ class Image extends Component {
       this.state.skip = this.state.skip + 10
     }    
     axios.get(Env.Url+'images/'+this.state.skip).then(res =>{
-      if(res.data.length>0){
-        this.setState({records : res.data})
-      }
-      
+      if(res.data.data.length>0){
+        this.setState({records : res.data.data})
+        this.setState({count : res.data.count})
+        this.setState({pages : res.data.pages})
+        this.setState({current_page : res.data.current_page})
+      }      
     }).catch(error => {
       this.state.skip =10
   });
   }
-
-
 
   searchElement(evt) {
     if(evt.target.value == ''){
@@ -127,15 +127,24 @@ class Image extends Component {
                       <nav>
                         <Row>
 
-                          <Col xs='12'  sm='8'>
+                          <Col xs='12'  sm='2'>
                             <Pagination>
                               <PaginationItem onClick={ ((e) => this.getRecords('prev'))} disabled={this.state.prev}><PaginationLink previous tag="button">Prev</PaginationLink></PaginationItem>
                               <PaginationItem  onClick={ ((e) => this.getRecords('next'))}  disabled={this.state.next}><PaginationLink next tag="button">Next</PaginationLink></PaginationItem>                              
                             </Pagination>
                           </Col>
+                          <Col xs="12" sm="2">
+                                    count : {this.state.count}
+                          </Col>
+                          <Col xs="12" sm="2">
+                                    pages : {this.state.pages}
+                          </Col>
+                          <Col xs="12" sm="2">
+                                    current_page : {this.state.current_page}
+                          </Col>
 
                         </Row>
-                            </nav>
+                      </nav>
                       
                     </CardBody>
                 </Card>

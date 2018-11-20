@@ -40,8 +40,12 @@ class GetRecords(Resource):
         all_counts = db.timeseries_data.find().count()
         records = []
         for i in data:
+            try:
+                objects = ast.literal_eval(i.get('objects'))
+            except:
+                objects = ''
             info  = {
-                'objects': ast.literal_eval(i['objects']) if 'objects' in i else '' , 
+                'objects': objects, 
                 'mac_address':i['mac_address'],
                 'timestamp':  i['timestamp'],
                 'source':  i['source'].decode("utf-8"),
@@ -56,9 +60,13 @@ class SearchRecords(Resource):
     def get(self,name):
         data = db.timeseries_data.find({"timestamp":{"$regex": u"{}".format(str(name))}})
         records = []
-        for i in data:        
+        for i in data:
+            try:
+                objects = ast.literal_eval(i.get('objects'))
+            except:
+                objects = ''        
             info  = {
-                'objects': ast.literal_eval(i['objects']) if 'objects' in i else '' , 
+                'objects': objects , 
                 'mac_address':i['mac_address'],
                 'timestamp':  i['timestamp'],
                 'source':  i['source'].decode("utf-8"),
@@ -134,8 +142,6 @@ class ObjectDetection(Resource):
             }))
             s.close()
             return json.loads(json.dumps(data, default=json_util.default))
-
-
 
 api.add_resource(GetRecords, '/images/<int:id>')
 api.add_resource(SearchRecords, '/search/<string:name>')

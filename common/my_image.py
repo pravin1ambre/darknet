@@ -11,6 +11,8 @@ import shutil
 from datetime import datetime
 from PIL import ImageFile
 from logger import exception
+import requests
+
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
@@ -21,7 +23,7 @@ MONGO_HOST = 'localhost'
 MONGO_PORT = '27017'
 MONGO_DB = 'kkesani_3'
 IMAGE_PATH = '/home/pravin/project/darknet/darknet/images/'
-DATASCIENCE_IMAGE_PATH = '/home/pravin/data_science_images/'
+DATASCIENCE_IMAGE_PATH = '/home/pravin/data_science_images'
 IMG_SLEEP_TIME = 1
 PROCESS_SLEEP_TIME = 2
 MAX_IMG_SIZE = 50017
@@ -56,57 +58,71 @@ def image_to_str(img, typ = None):
         img_str = base64.b64encode(imageFile.read())
     return img_str
 
-while True:
-    #data_path = "C:\\Users\\kkesani\\Desktop\\images"
-    data_path = "{}/images/".format(os.getcwd())
-    files_with_path = glob.glob(data_path + "/*")
-    print("Got {} files on  {}".format(len(files_with_path),data_path))
-    prediction_image="{}/predictions.jpg".format(os.getcwd())
-    for img in files_with_path:
-        utc = int(time.time())
-        #'/home/copy_images/'
-        copy_path = "{}/{}".format('/home/pravin/', str("".join(os.path.basename(img).split("_",2)[:2])))
-        if not os.path.exists(copy_path):
-            os.mkdir(copy_path)
-        shutil.copy(img, copy_path)
-        rename = str("_".join(os.path.basename(img).split("_",2)[:2]))+ str(int(time.time())) +'.jpg'
-        os.rename(copy_path+"/"+ os.path.basename(img),copy_path+"/"+rename)
+@exception
+def process_and_save_image(img):
+    data_dict = {'objects': ''}
+    mac_address = "_".join(os.path.basename(img).split("_", 3)[:3])
+    mac_address_exists = db.config.find_one({"mac_address": mac_address})
+    print("Executing for {}".format(img))
 
-        data_dict = {}
-        mac_address = "_".join(os.path.basename(img).split("_",3)[:3])
-        mac_address_exists = db.config.find_one({"mac_address": mac_address})
-        print("Executing for {}".format(img))
-        img_str = image_to_str(img)
-        objects = ''
-        predictions_image = image_to_str(prediction_image, typ="Prediction_image")
-        if  mac_address_exists !=None and mac_address_exists['object_sync']:
-            objects = detect_object(img)
-            data_dict['objects'] = json.dumps(objects)
-            data_dict['prediction_image'] = predictions_image
+    if mac_address_exists and mac_address_exists['object_sync']:
+        data_dict['objects'] = json.dumps(detect_object(img))
+        data_dict['prediction_image'] = image_to_str(
+            "{}/predictions.jpg".format(os.getcwd()),
+            typ="Prediction_image")
 
-        if mac_address_exists == None:
-            data = { 'mac_address': mac_address, 'object_sync': False,'tag'   : 'tag', 
-                     'source_sync':True,  'thumbnail_sync': True , 'prediction_sync': False             }
-            db.config.insert_one(data)
+    if not mac_address_exists:
+        data = {'mac_address': mac_address,
+                'object_sync': False,
+                'tag': 'tag',
+                'source_sync': True,
+                'thumbnail_sync': True,
+                'prediction_sync': False,
+                "creationTime": datetime.now(),
+                }
+        db.config.insert_one(data)
 
-        thumbnail_image = resizeImage(img)        
-        data_dict['uuid']=  str(uuid.uuid1())
-        data_dict['timestamp']= int(time.time())
-        data_dict['mac_address']= mac_address
-        data_dict['source']= img_str
-        data_dict['thumbnail'] = thumbnail_image 
-        data_dict["creationTime"] = datetime.now(),
-        db.timeseries_data.insert_one(data_dict)       
+    data_dict['uuid'] = str(uuid.uuid1())
+    data_dict['timestamp'] = int(time.time())
+    data_dict['mac_address'] = mac_address
+    data_dict['source'] = image_to_str(img)
+    data_dict['thumbnail'] = resizeImage(img)
+    data_dict['creationTime'] = datetime.now()
+    db.timeseries_data.insert_one(data_dict)
 
-        hostname = socket.gethostname()        
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        publisher.send(json.dumps({
-            'thumbnail' : thumbnail_image.decode(), 'uuid':data_dict['uuid'],'timestamp':data_dict['timestamp'],
-            'mac_address': data_dict['mac_address'],'ip': s.getsockname()[0] , 'objects': json.dumps(objects)
-        }))
-        s.close()
-        time.sleep(1)
-        os.remove(img)
-    #wait for 1 minute
-    time.sleep(2)
+    return data_dict
+
+@exception
+def send_image_info(data_dict):
+    publisher = DataPublisher()
+    publisher.send(json.dumps({
+        'thumbnail': data_dict['thumbnail'].decode(),
+        'uuid': data_dict['uuid'],
+        'timestamp': data_dict['timestamp'],
+        'mac_address': data_dict['mac_address'],
+        'ip': requests.get("http://icanhazip.com").text.strip(),
+        'objects': data_dict['objects']
+    }))
+    pass
+
+@exception
+def get_img_files():
+    files_with_path = glob.glob(IMAGE_PATH + "/*")
+    print("Got {} files on  {}".format(len(files_with_path), IMAGE_PATH))
+    return files_with_path
+
+if __name__ == '__main__':
+    while True:
+        for img in get_img_files():
+            data_dict = process_and_save_image(img)
+            send_image_info(data_dict)
+            time.sleep(IMG_SLEEP_TIME)
+            copy_path = "{}/{}".format(DATASCIENCE_IMAGE_PATH, str("".join(os.path.basename(img).split("_",2)[:2])))
+            if not os.path.exists(copy_path):
+                os.mkdir(copy_path)
+            shutil.copy(img, copy_path)
+            rename = str("_".join(os.path.basename(img).split("_",2)[:2]))+ str(int(time.time())) +'.jpg'
+            os.rename(copy_path+"/"+ os.path.basename(img),copy_path+"/"+rename)
+            os.remove(img)
+        # wait for 1 minute
+        time.sleep(PROCESS_SLEEP_TIME)

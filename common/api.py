@@ -27,17 +27,15 @@ class GetRecords(Resource):
     def get(self, id):
         data = db.timeseries_data.find().sort([("_id", -1)]).skip(int(id)).limit(10)
         count =10
-        page_count = 0
-        for i in db.timeseries_data.find().skip(count).limit(10):
-            if len(list(i)):
-                page_count = page_count +1
-                count = count+10
-                page_count-2
-            else:
-                break  
-        if page_count == 0:
-            page_count = 1
         all_counts = db.timeseries_data.find().count()
+        page_count = 0
+        if all_counts < 10 and all_counts > 0:
+            page_count = 1
+        elif all_counts > 10 and isinstance(all_counts/count, float):
+            page_count = int(all_counts/count)+1
+        elif all_counts > 10 and isinstance(all_counts/count, int):
+            page_count = int(all_counts/count)
+
         records = []
         for i in data:
             try:
@@ -84,18 +82,15 @@ class Configuration(Resource):
     def get(self, id):
         data =list(db.config.find().skip(int(id)).limit(10))
         count =10
+        all_counts = db.config.find().count()
         page_count = 0
-        for i in db.config.find().skip(count).limit(10):
-            if len(list(i)):
-                page_count = page_count +1
-                count = count+10
-                page_count-2
-            else:
-                break
-        if page_count == 0:
+        if all_counts < 10 and all_counts > 0:
             page_count = 1
-
-        return {'data':json.loads(json.dumps(data, default=json_util.default)),'count' : db.config.find().count(), 'pages':page_count, 'current_page' : 1 if int(id) == 0 else (int(id)/10)+1}
+        elif all_counts > 10 and isinstance(all_counts/count, float):
+            page_count = int(all_counts/count)+1
+        elif all_counts > 10 and isinstance(all_counts/count, int):
+            page_count = int(all_counts/count)
+        return {'data':json.loads(json.dumps(data, default=json_util.default)),'count' : all_counts, 'pages':page_count, 'current_page' : 1 if int(id) == 0 else (int(id)/10)+1}
 
 
 class ObjectDetection(Resource):

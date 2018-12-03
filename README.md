@@ -6,7 +6,7 @@ Data flow :
 --------
 
 [img]
-![github_saleor_readmew_header_01](https://github.com/pravin1ambre/darknet/blob/master/Blank Diagram.jpeg)
+![github_saleor_readmew_header_01](https://github.com/pravin1ambre/darknet/blob/master/Blank_Diagram.jpeg)
 
 
 About :

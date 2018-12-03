@@ -25,8 +25,8 @@ Installation:
 follow the steps in link we provided for installation of vsftpd server on machine  
 https://www.digitalocean.com/community/tutorials/how-to-set-up-vsftpd-for-a-user-s-directory-on-debian-9  
 
-2] GIT :
-steps:
+2] GIT:  
+steps:  
 1. create folder with name io_object_detection  
 2. clone project from git  
 3. copy app folder from c: paste in io_object_detection folder

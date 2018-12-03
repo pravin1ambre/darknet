@@ -26,21 +26,25 @@ follow the steps in link we provided for installation of vsftpd server on machin
 https://www.digitalocean.com/community/tutorials/how-to-set-up-vsftpd-for-a-user-s-directory-on-debian-9  
 
 2] GIT:  
-steps:  
+>steps:  
 1. create folder with name io_object_detection  
 2. clone project from git  
 3. copy app folder from c: paste in io_object_detection folder
 
 
-3] DOCKER :
-steps:
+3] DOCKER:  
+>steps:  
 1. Install Docker and docker-compose on machine
 2. go to current directory
 `` cd io_object_detection
 ``
 3. run command on terminal/cmd
-          start docker containers : docker-compose up
-	  stop  docker containers : docker-compose down	
+``
+start docker containers : docker-compose up
+``
+``
+stop  docker containers : docker-compose down
+``
 
 How to Use
 -------------

@@ -48,6 +48,14 @@ stop  docker containers : docker-compose down
 
 How to Use
 -------------
+Send camera images to vsftpd server
+Go to website and login it in dashboard. dashboard having two tabs > configuration > images  
+>Configuration side panel: 
+  show all mac addresses and also run algoritham of specific mac_addres for detect obejct
+>Images side panel: 
+  show all source image with date time, if exists predicted image, thumbnail image
+
+
 
 
 

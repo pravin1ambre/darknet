@@ -39,8 +39,6 @@ https://www.digitalocean.com/community/tutorials/how-to-set-up-vsftpd-for-a-user
 `` cd io_object_detection
 ``
 3. run command on terminal/cmd  
-
-
 ``
 start docker containers : docker-compose up  
 ``  

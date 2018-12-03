@@ -41,10 +41,11 @@ https://www.digitalocean.com/community/tutorials/how-to-set-up-vsftpd-for-a-user
 3. run command on terminal/cmd  
 ``
 start docker containers : docker-compose up  
-``
+``  
+
 ``
 stop  docker containers : docker-compose down  
-``
+``  
 
 How to Use
 -------------

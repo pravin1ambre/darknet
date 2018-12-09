@@ -1,0 +1,5 @@
+pymongo
+wheel
+gunicorn
+flask-restful
+flask_cors

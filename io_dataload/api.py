@@ -4,6 +4,7 @@ from flask_cors import CORS
 from flask import jsonify
 import glob
 import os
+from flask_mysqldb import MySQL
 
 import ast
 import json
@@ -13,16 +14,32 @@ from bson import json_util
 app = Flask(__name__)
 api = Api(app)
 CORS(app)
-import PyMySQL
+
+app.config['MYSQL_USER'] = 'root'
+app.config['MYSQL_PASSWORD'] = 'admin'
+app.config['MYSQL_DB'] = 'test'
+app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
+mysql = MySQL(app)
+
+
+@app.route('/')
+def users():
+    cur = mysql.connection.cursor()
+    cur.execute('''select * from csvdata''')
+    rv = cur.fetchall()
+    return str(rv)
 
 
 class GetRecords(Resource):
     def get(self):
         from zipfile import ZipFile
-        zf = ZipFile('HP444 Cobalt 32 State 707H TDI-712-MLA01-012 - output data.csv.zip', 'r')
-        zf.extractall('/home/pravin/confidential/')
+        zf = ZipFile('/home/pravin/project/darknet/rest_flask/HP444.zip')
+        zf.extractall('/home/pravin/project/darknet/rest_flask/')
         zf.close()
         import datetime, os
+
+        cur = mysql.connection.cursor()
+
 
         mapping_file = open('54.txt','r') 
         data = mapping_file.readlines()
@@ -32,32 +49,28 @@ class GetRecords(Resource):
             keys.append(ta[2].split('\t\r\n')[0])
 
         import csv
-        import MySQLdb
-
-        mydb = PyMySQL.connect(host='localhost',
-            user='root',
-            passwd='admin',
-            db='test')
-        cursor = mydb.cursor()
         count = 0
-        csv_data = csv.reader(file('HP444 Cobalt 32 State 707H TDI-712-MLA01-012 - output data.csv'))
-        for row in csv_data:
+        File = open('/home/pravin/project/darknet/rest_flask/HP444.csv')
+        csv_data = csv.reader(File)
+        # csv_data = csv.reader(file('/home/pravin/project/darknet/rest_flask/HP444.csv'))
+        for row in list(csv_data):
             if not '#' in row[0]:
                 if count:
                     cnt = 0
                     for r in row[2:]:
+                        print(r)
                         try: 
                             key = keys[cnt]
                         except:
                             key = None  
                         cnt +=1   
-                        cursor.execute('INSERT INTO csvdata(Date, Time,matrics,value,timestamp) VALUES("{}", "{}", "{}","{}","{}")'.format(row[0],row[1],key,r,datetime.datetime.now()))
+                        cur.execute('INSERT INTO csvdata(Date, Time,matrics,value,timestamp) VALUES("{}", "{}", "{}","{}","{}")'.format(row[0],row[1],key,r,datetime.datetime.now()))
                 count += 1
                 
         #close the connection to the database.
-        mydb.commit()
-        cursor.close()
-
+        mysql.connection.commit()
+        rv = cur.fetchall()
+        return str(rv)
 
 
 api.add_resource(GetRecords, '/store')

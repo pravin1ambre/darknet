@@ -10,33 +10,31 @@ from flask_mysqldb import MySQL
 import csv
 from zipfile import ZipFile
 import glob
-
 import ast
 import json
 import base64
 from bson import json_util
 import shutil 
-
 app = Flask(__name__)
 api = Api(app)
 CORS(app)
 
+#database configration with class
 app.config['MYSQL_USER'] = 'root'
 app.config['MYSQL_PASSWORD'] = 'admin'
-app.config['MYSQL_DB'] = 'test'
+app.config['MYSQL_DB'] = 'io_dataload'
 app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
 mysql = MySQL(app)
 
 
-@app.route('/')
-def users():
-    cur = mysql.connection.cursor()
-    cur.execute('''select * from csvdata''')
-    rv = cur.fetchall()
-    return str(rv)  
+class CsvRecords(Resource):
+    def get(self):
+        cur = mysql.connection.cursor()
+        cur.execute('''select * from dataload''')
+        rv = cur.fetchall()
+        return str(rv) 
 
-
-class GetRecords(Resource):
+class StoreRecords(Resource):
     def getZip(self):
         zip_data = glob.glob(os.getcwd()+"/data_zip/*.zip")
         if zip_data:
@@ -49,29 +47,46 @@ class GetRecords(Resource):
 
     def insideFolder(self,dir_path):
         csv_files= glob.glob(dir_path + "/*.csv")
+        condition = True
+        while condition:
+            condition = False
+            for i in  os.listdir(dir_path):
+                if  os.path.isdir(dir_path+"/"+i):
+                    csv_files.extend( glob.glob("{}/{}/{}".format(dir_path,i,"*.csv")))
+                    dir_path = "{}/{}".format(dir_path, i)
+                    for j in  os.listdir(dir_path):
+                        if  os.path.isdir(dir_path+"/"+j):
+                            condition = True
+
+        self.sendToCsv(csv_files)
+
+    def sendToCsv(self,csv_files):
         for csv in csv_files:
             self.csvFile(csv)
-    
-    def csvFile(self,csv_path):
-        cur = mysql.connection.cursor()
+
+    def mapping_key(self):
         mapping_file = open(os.getcwd()+'/54.txt','r') 
         data = mapping_file.readlines()
         keys = []
         for da in data:
             ta = da.split("\t\t")
             keys.append(ta[2].split('\t\r\n')[0])
+        return keys
 
+    
+    def csvFile(self,csv_path):
+        cur = mysql.connection.cursor()
+        keys = self.mapping_key()
         count = 0
         File = open(csv_path)
         csv_data = csv.reader(File)
         for row in list(csv_data):
             if not '#' in row[0]:
                 date = row[0].split("/")
-                try :
+                try : 
                     date = date[1]+"-"+date[2] + "-"+ date[0] + " " +row[1]
                 except:
                     date = date
-                print(date)
                 if count:
                     cnt = 0
                     for r in row[2:]:
@@ -81,16 +96,15 @@ class GetRecords(Resource):
                         except:
                             key = None  
                         cnt +=1   
-                        cur.execute('INSERT INTO csvdata(date,unix_timestamp,metrics,value,timestamp) VALUES("{}", "{}", "{}","{}","{}")'.format(date,
+                        cur.execute('INSERT INTO dataload(date,unix_timestamp,metrics,value,timestamp) VALUES("{}", "{}", "{}","{}","{}")'.format(date,
                             time.mktime(datetime.datetime.strptime(row[0], "%Y/%m/%d").timetuple()),
                             key,r,datetime.datetime.now()))
-                count += 1
-                
+                        # break
+                count += 1                
         mysql.connection.commit()
         return cur.fetchall()
 
-    def get(self):
-        
+    def get(self):        
         if os.listdir(os.getcwd()+"/data_zip"):
             self.getZip()
         else:
@@ -110,7 +124,8 @@ class GetRecords(Resource):
         return str(data)
 
 
-api.add_resource(GetRecords, '/store')
+api.add_resource(CsvRecords, '/')
+api.add_resource(StoreRecords, '/store')
 
 if __name__ == '__main__':
     app.run(port="5001", debug=True)

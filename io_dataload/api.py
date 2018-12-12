@@ -13,7 +13,6 @@ import glob
 import ast
 import json
 import base64
-from bson import json_util
 import shutil 
 app = Flask(__name__)
 api = Api(app)
@@ -96,15 +95,15 @@ class StoreRecords(Resource):
                         except:
                             key = None  
                         cnt +=1   
-                        cur.execute('INSERT INTO dataload(date,unix_timestamp,metrics,value,timestamp) VALUES("{}", "{}", "{}","{}","{}")'.format(date,
+                        cur.execute('INSERT INTO dataload(date,unix_timestamp,metrics,value,date_time) VALUES("{}", "{}", "{}","{}","{}")'.format(date,
                             time.mktime(datetime.datetime.strptime(row[0], "%Y/%m/%d").timetuple()),
                             key,r,datetime.datetime.now()))
-                        # break
+                        break
                 count += 1                
         mysql.connection.commit()
         return cur.fetchall()
 
-    def get(self):        
+    def get(self):
         if os.listdir(os.getcwd()+"/data_zip"):
             self.getZip()
         else:
@@ -119,8 +118,9 @@ class StoreRecords(Resource):
                     break #single csv file
                 elif i.endswith('.csv'):
                     data = self.csvFile(i)
-            # for f in folder:
-            #     shutil.rmtree(f)
+
+            shutil.rmtree(os.getcwd()+"/data_zip")
+            os.makedirs(os.getcwd()+"/data_zip")
         return str(data)
 
 

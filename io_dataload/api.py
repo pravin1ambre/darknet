@@ -31,7 +31,7 @@ class CsvRecords(Resource):
         cur = mysql.connection.cursor()
         cur.execute('''select * from dataload''')
         rv = cur.fetchall()
-        return str(rv) 
+        return "<html><body><h1>'Hello World'</h1></body></html>"
 
 class StoreRecords(Resource):
     def getZip(self):
@@ -66,12 +66,13 @@ class StoreRecords(Resource):
     def mapping_key(self):
         mapping_file = open(os.getcwd()+'/54.txt','r') 
         data = mapping_file.readlines()
-        keys = []
+        cur = mysql.connection.cursor()
         for da in data:
             ta = da.split("\t\t")
-            keys.append(ta[2].split('\t\r\n')[0])
-        return keys
-
+            cur.execute("select * from maptable where metrics='{}'".format(ta[2].split('\t\r\n')[0]))
+            if not cur.fetchone():
+                cur.execute('INSERT INTO maptable(types,name,metrics) VALUES("{}", "{}", "{}")'.format(ta[0],ta[1],ta[2].split('\t\r\n')[0]))
+        mysql.connection.commit()
     
     def csvFile(self,csv_path):
         cur = mysql.connection.cursor()
@@ -86,10 +87,12 @@ class StoreRecords(Resource):
                     date = date[1]+"-"+date[2] + "-"+ date[0] + " " +row[1]
                 except:
                     date = date
+                if count == 0:
+                    keys = self.arrangeKeys(row[2:])
                 if count:
                     cnt = 0
                     for r in row[2:]:
-                        print(r)
+                        # print(r)
                         try: 
                             key = keys[cnt]
                         except:
@@ -102,6 +105,14 @@ class StoreRecords(Resource):
                 count += 1                
         mysql.connection.commit()
         return cur.fetchall()
+    #map with key
+    def arrangeKeys(self,row):
+        cur = mysql.connection.cursor()
+        key = []
+        for r in row:
+            cur.execute("select metrics from maptable where name='{}'".format(r))
+            [key.append(i['metrics'])for i in cur.fetchall()]
+        return key
 
     def get(self):
         if os.listdir(os.getcwd()+"/data_zip"):
@@ -119,8 +130,8 @@ class StoreRecords(Resource):
                 elif i.endswith('.csv'):
                     data = self.csvFile(i)
 
-            shutil.rmtree(os.getcwd()+"/data_zip")
-            os.makedirs(os.getcwd()+"/data_zip")
+            # shutil.rmtree(os.getcwd()+"/data_zip")
+            # os.makedirs(os.getcwd()+"/data_zip")
         return str(data)
 
 

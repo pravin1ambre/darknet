@@ -31,7 +31,7 @@ class CsvRecords(Resource):
         cur = mysql.connection.cursor()
         cur.execute('''select * from dataload''')
         rv = cur.fetchall()
-        return "<html><body><h1>'Hello World'</h1></body></html>"
+        return str(rv)
 
 class StoreRecords(Resource):
     def getZip(self):
@@ -84,7 +84,7 @@ class StoreRecords(Resource):
             if not '#' in row[0]:
                 date = row[0].split("/")
                 try : 
-                    date = date[1]+"-"+date[2] + "-"+ date[0] + " " +row[1]
+                    date = date[1]+"-"+date[2] + "-"+ date[0] + " " +row[1].split('.')[0]
                 except:
                     date = date
                 if count == 0:
@@ -92,16 +92,17 @@ class StoreRecords(Resource):
                 if count:
                     cnt = 0
                     for r in row[2:]:
-                        # print(r)
-                        try: 
-                            key = keys[cnt]
-                        except:
-                            key = None  
-                        cnt +=1   
-                        cur.execute('INSERT INTO dataload(date,unix_timestamp,metrics,value,date_time) VALUES("{}", "{}", "{}","{}","{}")'.format(date,
-                            time.mktime(datetime.datetime.strptime(row[0], "%Y/%m/%d").timetuple()),
-                            key,r,datetime.datetime.now()))
-                        break
+                        if int(float(r)):
+                            try: 
+                                key = keys[cnt]
+                            except:
+                                key = None  
+                            cnt +=1   
+                            cur.execute('INSERT INTO dataload(date,unix_timestamp,metrics,value,date_time) VALUES("{}", "{}", "{}","{}","{}")'
+                                .format(date,
+                                time.mktime(datetime.datetime.strptime(row[0], "%Y/%m/%d").timetuple()),
+                                key,float(r),datetime.datetime.now()))
+                            break
                 count += 1                
         mysql.connection.commit()
         return cur.fetchall()

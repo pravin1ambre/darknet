@@ -4,86 +4,139 @@ from flask_cors import CORS
 from flask import jsonify
 import glob
 import os
-
-from pymongo import MongoClient
+import datetime
+import time
+from flask_mysqldb import MySQL
+import csv
+from zipfile import ZipFile
+import glob
 import ast
-
+import json
+import base64
+import shutil 
 app = Flask(__name__)
 api = Api(app)
 CORS(app)
-#mongo db
-#app.config['MONGO_DBNAME'] = 'kkesani_3'
-#app.config['MONGO_URI'] = 'mongodb://localhost:27017/kkesani_3'
-#mongo = PyMongo(app)
 
-def mongo_connection_with_collection():
-    client = MongoClient('mongodb://localhost:27017')
-    db = client['kkesani_3']
-    col = db.timeseries_image
-    col1 = db.config
-    return col, col1
+#database configration with class
+app.config['MYSQL_USER'] = 'root'
+app.config['MYSQL_PASSWORD'] = 'admin'
+app.config['MYSQL_DB'] = 'io_dataload'
+app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
+mysql = MySQL(app)
 
-class GetRecords(Resource):
+
+class CsvRecords(Resource):
     def get(self):
-        col, col1 = mongo_connection_with_collection()
-        #col = mongo.db.image
-        data = col.find()
-        records = []
-        for i in data:
-            info  = {
-                'objects': ast.literal_eval(i['objects']) if 'objects' in i else '' , 
-                'name':i['timestamp_thumbnail_image'],
-                'timestamp':  i['timestamp'],
-                'image':  i['image'].decode("utf-8"),
-                'prediction_image': i['prediction_image'].decode("utf-8") if 'prediction_image' in i else '' ,
-                'thumbnail': i['thumbnail'].decode("utf-8"),
-            }
-            records.append(info)
-        return  records[::-1]
+        cur = mysql.connection.cursor()
+        cur.execute('''select * from dataload''')
+        rv = cur.fetchall()
+        return "<html><body><h1>'Hello World'</h1></body></html>"
 
-class SearchRecords(Resource):
-    def get(self,name):
-        col, col1 = mongo_connection_with_collection()
-        data = col.find({"name":{"$regex": u"{}".format(name), "$options": "-i"}})
-        records = []
-        for i in data:        
-            sata  = {'objects': ast.literal_eval(i['objects']),
-                'name':i['name'],
-                'timestamp':  i['timestamp'],
-                'image': i['image'].decode("utf-8"),
-                'prediction_image': i['prediction_image'].decode("utf-8"),
-                'thumbnail': i['thumbnail'].decode("utf-8"),
-            }
-            records.append(sata)
-			
-        return  records[::-1]
+class StoreRecords(Resource):
+    def getZip(self):
+        zip_data = glob.glob(os.getcwd()+"/data_zip/*.zip")
+        if zip_data:
+            for i in zip_data:
+                print (os.getcwd()+"/zip_backup")
+                shutil.copy(i, os.getcwd()+"/zip_backup")
+                zf = ZipFile(i)        
+                zf.extractall(os.getcwd()+"/data_zip/")
+                zf.close()
 
-class LatestImages(Resource):
-    def get(self):
-        imagelist = glob.glob("/home/pravin/project/darknet/darknet/images/*")
-        list = [os.path.basename(i) for i in imagelist]
-        return list      
-        
-class Algoritham(Resource):
-    def get(self,name):
-        col, col1 = mongo_connection_with_collection()
-        data = { 'mac_address': name, 'action': 1, 'tag' : 'tag' }
-        col1.insert_one(data)
-        return True
+    def insideFolder(self,dir_path):
+        csv_files= glob.glob(dir_path + "/*.csv")
+        condition = True
+        while condition:
+            condition = False
+            for i in  os.listdir(dir_path):
+                if  os.path.isdir(dir_path+"/"+i):
+                    csv_files.extend( glob.glob("{}/{}/{}".format(dir_path,i,"*.csv")))
+                    dir_path = "{}/{}".format(dir_path, i)
+                    for j in  os.listdir(dir_path):
+                        if  os.path.isdir(dir_path+"/"+j):
+                            condition = True
 
-class Database(Resource):
-    def get(self,name):
-        col, col1 = mongo_connection_with_collection()
-        data = { 'mac_address': name, 'action': 0,'tag'   : 'tag' }
-        col1.insert_one(data)
-        return True
+        self.sendToCsv(csv_files)
+
+    def sendToCsv(self,csv_files):
+        for csv in csv_files:
+            self.csvFile(csv)
+
+    def mapping_key(self):
+        mapping_file = open(os.getcwd()+'/54.txt','r') 
+        data = mapping_file.readlines()
+        cur = mysql.connection.cursor()
+        for da in data:
+            ta = da.split("\t\t")
+            cur.execute("select * from maptable where metrics='{}'".format(ta[2].split('\t\r\n')[0]))
+            if not cur.fetchone():
+                cur.execute('INSERT INTO maptable(types,name,metrics) VALUES("{}", "{}", "{}")'.format(ta[0],ta[1],ta[2].split('\t\r\n')[0]))
+        mysql.connection.commit()
     
+    def csvFile(self,csv_path):
+        cur = mysql.connection.cursor()
+        keys = self.mapping_key()
+        count = 0
+        File = open(csv_path)
+        csv_data = csv.reader(File)
+        for row in list(csv_data):
+            if not '#' in row[0]:
+                date = row[0].split("/")
+                try : 
+                    date = date[1]+"-"+date[2] + "-"+ date[0] + " " +row[1]
+                except:
+                    date = date
+                if count == 0:
+                    keys = self.arrangeKeys(row[2:])
+                if count:
+                    cnt = 0
+                    for r in row[2:]:
+                        # print(r)
+                        try: 
+                            key = keys[cnt]
+                        except:
+                            key = None  
+                        cnt +=1   
+                        cur.execute('INSERT INTO dataload(date,unix_timestamp,metrics,value,date_time) VALUES("{}", "{}", "{}","{}","{}")'.format(date,
+                            time.mktime(datetime.datetime.strptime(row[0], "%Y/%m/%d").timetuple()),
+                            key,r,datetime.datetime.now()))
+                        break
+                count += 1                
+        mysql.connection.commit()
+        return cur.fetchall()
+    #map with key
+    def arrangeKeys(self,row):
+        cur = mysql.connection.cursor()
+        key = []
+        for r in row:
+            cur.execute("select metrics from maptable where name='{}'".format(r))
+            [key.append(i['metrics'])for i in cur.fetchall()]
+        return key
 
-api.add_resource(GetRecords, '/images')
-api.add_resource(SearchRecords, '/search/<string:name>')
-api.add_resource(Algoritham, '/algorithm/<string:name>')
-api.add_resource(Database, '/database/<string:name>')
-api.add_resource(LatestImages, '/latest')
+    def get(self):
+        if os.listdir(os.getcwd()+"/data_zip"):
+            self.getZip()
+        else:
+            return {'message': 'No csv found'}
+        data = ''
+        if os.listdir(os.getcwd()+"/data_zip"):
+            folder = glob.glob(os.getcwd()+"/data_zip/*")
+            
+            for i in folder:
+                if os.path.isdir(i):
+                    data = self.insideFolder(i)
+                    break #single csv file
+                elif i.endswith('.csv'):
+                    data = self.csvFile(i)
+
+            # shutil.rmtree(os.getcwd()+"/data_zip")
+            # os.makedirs(os.getcwd()+"/data_zip")
+        return str(data)
+
+
+api.add_resource(CsvRecords, '/')
+api.add_resource(StoreRecords, '/store')
 
 if __name__ == '__main__':
     app.run(port="5001", debug=True)

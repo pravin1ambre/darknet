@@ -14,9 +14,13 @@ import ast
 import json
 import base64
 import shutil 
+import pandas as pd
+import re
 app = Flask(__name__)
 api = Api(app)
 CORS(app)
+from flask_sqlalchemy import SQLAlchemy
+
 
 #database configration with class
 app.config['MYSQL_USER'] = 'root'
@@ -25,115 +29,100 @@ app.config['MYSQL_DB'] = 'io_dataload'
 app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
 mysql = MySQL(app)
 
+from sqlalchemy import create_engine
+engine = create_engine('mysql://root:admin@localhost/io_dataload',echo=False)
+
+import_path = os.getcwd()+"/data_zip/"
+export_path = os.getcwd()+"/zip_backup/"
+map_file_path = os.getcwd()+'/54.txt'
+
 
 class CsvRecords(Resource):
     def get(self):
         cur = mysql.connection.cursor()
         cur.execute('''select * from dataload''')
-        rv = cur.fetchall()
-        return str(rv)
+        return jsonify(cur.fetchall())
 
 class StoreRecords(Resource):
     def getZip(self):
-        zip_data = glob.glob(os.getcwd()+"/data_zip/*.zip")
+        zip_data = glob.glob( "{}{}".format(import_path,"*.zip"))
         if zip_data:
             for i in zip_data:
-                print (os.getcwd()+"/zip_backup")
-                shutil.copy(i, os.getcwd()+"/zip_backup")
+                shutil.copy(i, export_path)
                 zf = ZipFile(i)        
-                zf.extractall(os.getcwd()+"/data_zip/")
+                zf.extractall(import_path)
                 zf.close()
 
     def insideFolder(self,dir_path):
-        csv_files= glob.glob(dir_path + "/*.csv")
-        condition = True
-        while condition:
-            condition = False
-            for i in  os.listdir(dir_path):
-                if  os.path.isdir(dir_path+"/"+i):
-                    csv_files.extend( glob.glob("{}/{}/{}".format(dir_path,i,"*.csv")))
-                    dir_path = "{}/{}".format(dir_path, i)
-                    for j in  os.listdir(dir_path):
-                        if  os.path.isdir(dir_path+"/"+j):
-                            condition = True
-
-        self.sendToCsv(csv_files)
+        import os
+        from os.path import join, getsize
+        csv_files = []
+        for dirpath, subdirs, files in os.walk(dir_path):
+            for x in files:
+                if x.endswith(".csv"):
+                    csv_files.append(os.path.join(dirpath, x))
+        print(csv_files, '---------------------------')
+        return self.sendToCsv(csv_files)
 
     def sendToCsv(self,csv_files):
         for csv in csv_files:
             self.csvFile(csv)
 
     def mapping_key(self):
-        mapping_file = open(os.getcwd()+'/54.txt','r') 
+        mapping_file = open(map_file_path,'r') 
         data = mapping_file.readlines()
         cur = mysql.connection.cursor()
         for da in data:
             ta = da.split("\t\t")
-            cur.execute("select * from maptable where metrics='{}'".format(ta[2].split('\t\r\n')[0]))
-            if not cur.fetchone():
-                cur.execute('INSERT INTO maptable(types,name,metrics) VALUES("{}", "{}", "{}")'.format(ta[0],ta[1],ta[2].split('\t\r\n')[0]))
+            metrics = int(re.search(r'\d+', ta[2]).group())
+            cur.execute("select * from maptable where metrics='{}'".format(metrics))
+            if not cur.fetchone():                
+                cur.execute('INSERT INTO maptable(types,name,metrics) VALUES("{}", "{}", "{}")'.format(ta[0],ta[1],metrics))
         mysql.connection.commit()
     
     def csvFile(self,csv_path):
         cur = mysql.connection.cursor()
-        keys = self.mapping_key()
         count = 0
         File = open(csv_path)
         csv_data = csv.reader(File)
+
+        skiplist = []
         for row in list(csv_data):
-            if not '#' in row[0]:
-                date = row[0].split("/")
-                try : 
-                    date = date[1]+"-"+date[2] + "-"+ date[0] + " " +row[1].split('.')[0]
-                except:
-                    date = date
-                if count == 0:
-                    keys = self.arrangeKeys(row[2:])
-                if count:
-                    cnt = 0
-                    for r in row[2:]:
-                        if int(float(r)):
-                            try: 
-                                key = keys[cnt]
-                            except:
-                                key = None  
-                            cnt +=1   
-                            cur.execute('INSERT INTO dataload(date,unix_timestamp,metrics,value,date_time) VALUES("{}", "{}", "{}","{}","{}")'
-                                .format(date,
-                                time.mktime(datetime.datetime.strptime(row[0], "%Y/%m/%d").timetuple()),
-                                key,float(r),datetime.datetime.now()))
-                            break
-                count += 1                
-        mysql.connection.commit()
-        return cur.fetchall()
-    #map with key
-    def arrangeKeys(self,row):
-        cur = mysql.connection.cursor()
-        key = []
-        for r in row:
-            cur.execute("select metrics from maptable where name='{}'".format(r))
-            [key.append(i['metrics'])for i in cur.fetchall()]
-        return key
+            if  '#' in row[0]:
+                skiplist.append(count)
+            else:
+                break
+            count +=1
+        df = pd.read_csv(csv_path ,skiprows = skiplist)
+
+        unix_timestamp = df['Date'].apply(lambda x:time.mktime(datetime.datetime.strptime(x, "%Y/%m/%d").timetuple()))
+        times = df['Time'].apply(lambda x:x.split('.')[0])
+        date_time = df['Date'].apply(lambda x: datetime.datetime.strptime(x, '%Y/%m/%d').strftime('%m-%d-%y')) +' '+ times
+        # date_time = date + ' '+ df['Time']
+
+        for c_name in row[2:]:
+            cur.execute("select metrics from maptable where name='{}'".format(c_name))
+            metrics = int(re.search(r'\d+', cur.fetchone()['metrics']).group())
+
+            data = pd.DataFrame({'date':date_time,'value' : df[c_name],'metrics':metrics,'unix_timestamp':unix_timestamp, 
+                                'date_time':datetime.datetime.now()})
+            data.to_sql('dataload', con=engine,if_exists='append')
 
     def get(self):
-        if os.listdir(os.getcwd()+"/data_zip"):
+        if os.listdir(import_path):
             self.getZip()
         else:
             return {'message': 'No csv found'}
         data = ''
-        if os.listdir(os.getcwd()+"/data_zip"):
-            folder = glob.glob(os.getcwd()+"/data_zip/*")
-            
-            for i in folder:
-                if os.path.isdir(i):
-                    data = self.insideFolder(i)
-                    break #single csv file
-                elif i.endswith('.csv'):
-                    data = self.csvFile(i)
+        self.mapping_key()
 
-            # shutil.rmtree(os.getcwd()+"/data_zip")
-            # os.makedirs(os.getcwd()+"/data_zip")
-        return str(data)
+        if os.listdir(import_path):
+            folder = glob.glob("{}".format(import_path,'*'))
+            self.insideFolder(import_path)           
+            
+            shutil.rmtree(import_path)
+            os.makedirs(import_path)
+            return str(data)
 
 
 api.add_resource(CsvRecords, '/')

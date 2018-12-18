@@ -24,23 +24,23 @@ from flask_sqlalchemy import SQLAlchemy
 
 #database configration with class
 app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = 'admin'
+app.config['MYSQL_PASSWORD'] = 'Dad@12345'
 app.config['MYSQL_DB'] = 'io_dataload'
 app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
 mysql = MySQL(app)
 
 from sqlalchemy import create_engine
-engine = create_engine('mysql://root:admin@localhost/io_dataload',echo=False)
+engine = create_engine('mysql://root:Dad@12345@localhost/io_dataload',echo=False)
 
-import_path = os.getcwd()+"/data_zip/"
-export_path = os.getcwd()+"/zip_backup/"
-map_file_path = os.getcwd()+'/54.txt'
+import_path = os.getcwd()+"\\data_zip\\"
+export_path = os.getcwd()+"\\zip_backup\\"
+map_file_path = os.getcwd()+'\\54.txt'
 
 
 class CsvRecords(Resource):
     def get(self):
         cur = mysql.connection.cursor()
-        cur.execute('''select * from dataload''')
+        cur.execute('''select * from dataload limit 100''')
         return jsonify(cur.fetchall())
 
 class StoreRecords(Resource):
@@ -95,11 +95,13 @@ class StoreRecords(Resource):
             count +=1
         df = pd.read_csv(csv_path ,skiprows = skiplist)
 
-        unix_timestamp = df['Date'].apply(lambda x:time.mktime(datetime.datetime.strptime(x, "%Y/%m/%d").timetuple()))
+        
         times = df['Time'].apply(lambda x:x.split('.')[0])
+        # unix_timestamp = df['Date'].apply(lambda x:time.mktime(datetime.datetime.strptime(x, "%Y/%m/%d").timetuple()))
         date_time = df['Date'].apply(lambda x: datetime.datetime.strptime(x, '%Y/%m/%d').strftime('%m-%d-%y')) +' '+ times
-        # date_time = date + ' '+ df['Time']
-
+        unix_time = df['Date'].apply(lambda x: x) +' '+ times
+        unix_timestamp = unix_time.apply(lambda x:time.mktime(datetime.datetime.strptime(x, "%Y/%m/%d %H:%M:%S").timetuple()))
+        
         for c_name in row[2:]:
             cur.execute("select metrics from maptable where name='{}'".format(c_name))
             metrics = int(re.search(r'\d+', cur.fetchone()['metrics']).group())
@@ -113,21 +115,25 @@ class StoreRecords(Resource):
             self.getZip()
         else:
             return {'message': 'No csv found'}
-        data = ''
         self.mapping_key()
 
         if os.listdir(import_path):
-            folder = glob.glob("{}".format(import_path,'*'))
-            self.insideFolder(import_path)           
-            
-            shutil.rmtree(import_path)
-            os.makedirs(import_path)
-            return str(data)
+            self.insideFolder(import_path)
+            for f in os.listdir(import_path):
+                if os.path.isdir(import_path+f):
+                    shutil.rmtree(import_path+f)
+                else:
+                    os.remove(import_path+f)
 
 
 api.add_resource(CsvRecords, '/')
 api.add_resource(StoreRecords, '/store')
 
 if __name__ == '__main__':
+    # while True:
+    #     print(1)
+    #     obj = StoreRecords()
+    #     obj.get()
+    #     time.sleep(3)
     app.run(port="5001", debug=True)
 

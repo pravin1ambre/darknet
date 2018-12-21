@@ -22,9 +22,16 @@ CORS(app)
 from sqlalchemy import create_engine
 engine = create_engine('mysql://root:Dad@12345@localhost/io_dataload',echo=False)
 
-import_path = os.getcwd()+"\\data_zip\\"
-export_path = os.getcwd()+"\\zip_backup\\"
-map_file_path = os.getcwd()+'\\54.txt'
+import platform
+
+import_path = os.getcwd()+"/data_zip/"
+export_path = os.getcwd()+"/zip_backup/"
+map_file_path = os.getcwd()+'/54.txt'
+if platform.system() == 'Windows':
+    import_path = os.getcwd()+"\\data_zip\\"
+    export_path = os.getcwd()+"\\zip_backup\\"
+    map_file_path = os.getcwd()+'\\54.txt'
+
 
 
 class StoreRecords(Resource):
@@ -32,7 +39,6 @@ class StoreRecords(Resource):
         zip_data = glob.glob( "{}{}".format(import_path,"*.zip"))
         if zip_data:
             for i in zip_data:
-                shutil.copy(i, export_path)
                 zf = ZipFile(i)        
                 zf.extractall(import_path)
                 zf.close()
@@ -62,6 +68,7 @@ class StoreRecords(Resource):
                 engine.execute('INSERT INTO maptable (types, name, metrics) VALUES (%s, %s, %s)', ta[0], ta[1], metrics)                
     
     def csvFile(self,csv_path):
+        print("----------------------------data is loading---------------",datetime.datetime.now())
         count = 0
         File = open(csv_path)
         csv_data = csv.reader(File)
@@ -81,35 +88,39 @@ class StoreRecords(Resource):
         date_time = df['Date'].apply(lambda x: datetime.datetime.strptime(x, '%Y/%m/%d').strftime('%m-%d-%y')) +' '+ times
         unix_time = df['Date'].apply(lambda x: x) +' '+ times
         unix_timestamp = unix_time.apply(lambda x:time.mktime(datetime.datetime.strptime(x, "%Y/%m/%d %H:%M:%S").timetuple()))
-        
+        all_data = pd.DataFrame()
         for c_name in row[2:]:
             result = engine.execute("select metrics from maptable where name=%s",c_name).fetchone()[0]
             metrics = int(re.search(r'\d+', result).group())
-
             data = pd.DataFrame({'date':date_time,'value' : df[c_name],'metrics':metrics,'unix_timestamp':unix_timestamp, 
-                                'date_time':datetime.datetime.now()})
-            data.to_sql('dataload', con=engine,if_exists='append')
+                                            'date_time':datetime.datetime.now()})
+            all_data = all_data.append(data)           
+
+        # data.to_sql('dataload', con=engine,if_exists='append',index=False)
+        all_data.to_sql('dataload', con=engine,if_exists='append',index=False)
 
     def get(self):
         if os.listdir(import_path):
+            for l in os.listdir(import_path):
+                shutil.copy(import_path+l, export_path)
             self.getZip()
         else:
+            print('------------no csv found------------------')
             return {'message': 'No csv found'}
         self.mapping_key()
 
         if os.listdir(import_path):
             self.insideFolder(import_path)
+            print("----------------------------data upload successfully---------------",datetime.datetime.now())
             for f in os.listdir(import_path):
                 if os.path.isdir(import_path+f):
                     shutil.rmtree(import_path+f)
                 else:
                     os.remove(import_path+f)
-                print("----------------------------data upload successfully---------------")
 
 
 if __name__ == '__main__':
     while True:
-        print("----------------------------data is loading---------------")
         obj = StoreRecords()
         obj.get()
         time.sleep(3)

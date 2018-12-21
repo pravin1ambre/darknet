@@ -21,7 +21,7 @@ api = Api(app)
 CORS(app)
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import create_engine
-engine = create_engine('mysql://root:Dad@12345@localhost/io_dataload',echo=False)
+engine = create_engine('mysql://root:admin@localhost/io_dataload',echo=False)
 
 #database configration with class
 
@@ -43,4 +43,3 @@ api.add_resource(CsvRecords, '/')
 
 if __name__ == '__main__':
     app.run(port="5001", debug=True)
-

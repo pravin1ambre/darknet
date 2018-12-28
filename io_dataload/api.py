@@ -1,4 +1,4 @@
-from flask import Flask, render_template, Response
+from flask import Flask, render_template, Response, jsonify
 from flask_restful import Resource, Api
 from flask_cors import CORS
 from flask import jsonify
@@ -19,27 +19,57 @@ import re
 app = Flask(__name__)
 api = Api(app)
 CORS(app)
+
+
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import create_engine
-engine = create_engine('mysql://root:admin@localhost/io_dataload',echo=False)
+from flask_marshmallow import Marshmallow
 
-#database configration with class
 
-# app.config['MYSQL_USER'] = 'root'
-# app.config['MYSQL_PASSWORD'] = 'Dad@12345'
-# app.config['MYSQL_DB'] = 'io_dataload'
-# app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
-# mysql = MySQL(app)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:admin@localhost/io_dataload'
 
+db = SQLAlchemy(app)
+ma = Marshmallow(app)
+
+class Dataload(db.Model):
+    date = db.Column(db.Text())
+    value = db.Column(db.Float())  
+    metrics = db.Column(db.BigInteger())
+    unix_timestamp = db.Column('unix_timestamp', db.Float, primary_key = True)
+    date_time = db.Column(db.DateTime())
+
+    def __init__(self, date, value, metrics, unix_timestamp, date_time):
+        self.date = date
+        self.value = value
+        self.metrics = metrics
+        self.unix_timestamp = unix_timestamp
+        self.date_time = date_time
+
+# db.create_all()
+
+class DataloadSchema(ma.Schema):
+    class Meta:
+        # Fields to expose
+        fields = ('date', 'value','metrics','unix_timestamp','date_time')
+
+dataload_schema = DataloadSchema()
+dataload_schemas = DataloadSchema(many=True)
 
 
 class CsvRecords(Resource):
-    def get(self):
-        result = engine.execute('''select * from dataload limit 100''')
-        return jsonify([(dict(row.items())) for row in result.fetchall()]) 
+    def get(self,page=1,):
+        PER_PAGE = 10
+        try:
+            dataload = Dataload.query.order_by(
+                Dataload.date_time.desc()
+            ).paginate(page, per_page=PER_PAGE)
+        except OperationalError:
+            flash("No Data in the database.")
+            dataload = None
+        result = dataload_schemas.dump(dataload.items)
+        return jsonify(result.data)
 
 
-api.add_resource(CsvRecords, '/')
+api.add_resource(CsvRecords, '/page/<int:page>')
 
 if __name__ == '__main__':
     app.run(port="5001", debug=True)

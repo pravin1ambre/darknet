@@ -15,14 +15,28 @@ import base64
 import shutil 
 import pandas as pd
 import re
+from sqlalchemy import *
+from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.engine.url import URL
+import platform
+
 app = Flask(__name__)
 api = Api(app)
 CORS(app)
 
-from sqlalchemy import create_engine
 engine = create_engine('mysql://root:Dad@12345@localhost/io_dataload',echo=False)
 
-import platform
+meta = MetaData()
+
+maptable = Table('maptable', meta,
+    Column('types', String, nullable=False),
+    Column('name', String, nullable=False),
+    Column('metrics', String, nullable=False)
+)
+maptable.create(engine,checkfirst=True)
 
 import_path = os.getcwd()+"/data_zip/"
 export_path = os.getcwd()+"/zip_backup/"
@@ -31,8 +45,6 @@ if platform.system() == 'Windows':
     import_path = os.getcwd()+"\\data_zip\\"
     export_path = os.getcwd()+"\\zip_backup\\"
     map_file_path = os.getcwd()+'\\54.txt'
-
-
 
 class StoreRecords(Resource):
     def getZip(self):
@@ -68,9 +80,9 @@ class StoreRecords(Resource):
                 engine.execute('INSERT INTO maptable (types, name, metrics) VALUES (%s, %s, %s)', ta[0], ta[1], metrics)                
     
     def csvFile(self,csv_path):
-        print("----------------------------data is loading---------------",datetime.datetime.now())
+        print("---------------------------  -data is loading--  -------------",datetime.datetime.now())
         count = 0
-        File = open(csv_path)
+        File = open(csv_path, encoding="utf8")
         csv_data = csv.reader(File)
 
         skiplist = []
@@ -81,7 +93,6 @@ class StoreRecords(Resource):
                 break
             count +=1
         df = pd.read_csv(csv_path ,skiprows = skiplist)
-
         
         times = df['Time'].apply(lambda x:x.split('.')[0])
         # unix_timestamp = df['Date'].apply(lambda x:time.mktime(datetime.datetime.strptime(x, "%Y/%m/%d").timetuple()))

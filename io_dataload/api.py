@@ -25,7 +25,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
 
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:admin@localhost/io_dataload'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:admin@Dad@12345/io_dataload'
 
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
@@ -33,7 +33,7 @@ ma = Marshmallow(app)
 class Dataload(db.Model):
     date = db.Column(db.Text())
     value = db.Column(db.Float())  
-    metrics = db.Column(db.BigInteger())
+    metrics = db.Column(db.Integer())
     unix_timestamp = db.Column('unix_timestamp', db.Float, primary_key = True)
     date_time = db.Column(db.DateTime())
 

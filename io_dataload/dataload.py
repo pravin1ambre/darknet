@@ -31,7 +31,7 @@ engine = create_engine('mysql://root:Dad@12345@localhost/io_dataload',echo=False
 
 meta = MetaData()
 
-#created maptable 
+#create table in io_dataload ie dataload
 maptable = Table('maptable', meta,
     Column('types', String, nullable=False),
     Column('name', String, nullable=False),
@@ -39,6 +39,7 @@ maptable = Table('maptable', meta,
 )
 maptable.create(engine,checkfirst=True) 
 
+#path of the zip folder and backup in linux and windows machine
 import_path = os.getcwd()+"/data_zip/"
 export_path = os.getcwd()+"/zip_backup/"
 map_file_path = os.getcwd()+'/54.txt'
@@ -48,28 +49,30 @@ if platform.system() == 'Windows':
     map_file_path = os.getcwd()+'\\54.txt'
 
 class StoreRecords(Resource):
+    #extract zip file in data zip folder
     def getZip(self):
         zip_data = glob.glob( "{}{}".format(import_path,"*.zip"))
         if zip_data:
             for file_path in zip_data:
-                zf = ZipFile(file_path)        
-                zf.extractall(import_path)
-                zf.close()
+                zip_file = ZipFile(file_path)        
+                zip_file.extractall(import_path)
+                zip_file.close()
 
-    def insideFolder(self,dir_path):
-        import os
-        from os.path import join, getsize
+    #select all available csv files from data zip folder
+    def insideFolder(self,import_path):        
         csv_files = []
-        for dirpath, subdirs, files in os.walk(dir_path):
+        for dirpath, subdirs, files in os.walk(import_path):
             for file_name in files:
                 if file_name.endswith(".csv"):
                     csv_files.append(os.path.join(dirpath, file_name))
         return self.sendToCsv(csv_files)
 
-    def sendToCsv(self,csv_files):
+    #iterate all selected csv file and send to csvFile function
+    def sendToCsv(self,csv_files): 
         for csv in csv_files:
             self.csvFile(csv)
 
+    #map unique  key for maptable 
     def mapping_key(self):
         mapping_file = open(map_file_path,'r') 
         file_data = mapping_file.readlines()
@@ -79,8 +82,9 @@ class StoreRecords(Resource):
             result = engine.execute("select * from maptable where metrics='{}'".format(metrics)).fetchone()
             if  result == None:
                 engine.execute('INSERT INTO maptable (types, name, metrics) VALUES (%s, %s, %s)', table_data[0], table_data[1], metrics)                
-    
-    def csvFile(self,csv_path):
+
+    #dataloading in database dataload table    
+    def csvFile(self,csv_path): 
         print("---------------------------  -data is loading--  -------------",datetime.datetime.now())
         count = 0
         File = open(csv_path, encoding="utf8")
@@ -111,6 +115,8 @@ class StoreRecords(Resource):
         # data.to_sql('dataload', con=engine,if_exists='append',index=False)
         all_data.to_sql('dataload', con=engine,if_exists='append',index=False)
 
+    #initial call of api and copy zip file in backup and after 
+    #operation on file it delete zip and all extrated file
     def get(self):
         if os.listdir(import_path):
             for name in os.listdir(import_path):
